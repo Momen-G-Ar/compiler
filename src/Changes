@@ -1,5 +1,20 @@
 Version 7.1
 
+10/19/26  [GH #218]
+Reachability after a temporary with a "noreturn" constructor or destructor
+
+An expression statement that constructs a temporary of a class type whose
+constructor or destructor is declared "noreturn" was not recognized as not
+returning.  Consequently, a spurious warning could be issued when control
+reached the end of an enclosing "noreturn" or non-void function.  That is now
+fixed.  For example, with --c++11:
+
+  struct A { [[noreturn]] A(); };
+  struct B { [[noreturn]] ~B(); };
+  [[noreturn]] void f() { A{}; }  // Previously warned that f returns.
+  int g() { B{}; }                // Previously warned about missing return.
+
+
 10/15/26  [GH #309]
 Position of (lowered) cleanups at the end of a function body
 
