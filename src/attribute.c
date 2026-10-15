@@ -1096,7 +1096,7 @@ namespace.  If non-zero, length represents the number of characters in name
     length = strlen(name);
   }  /* if */
   for (np = valid_attribute_namespaces; *np != NULL; np++) {
-    if (strncmp(*np, name, length) == 0) {
+    if (strncmp(*np, name, length) == 0 && (*np)[length] == '\0') {
       result = TRUE;
       break;
     }  /* if */
