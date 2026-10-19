@@ -1,0 +1,17 @@
+[GH #395]
+Internal error in CTAD rescan info for reused specializations
+
+An internal error ("missing default rescan info") could occur when building
+an implicit deduction guide for a constructor whose parameter type is a
+class template specialization with a nontype template argument referring to
+a dependent static data member, if that same specialization was already used
+earlier in the class (e.g., in a member declaration).  For example, with
+--c++17:
+
+  template<int> struct P {};
+  template<typename T> struct A {
+    static constexpr bool b = sizeof(T) == 1;
+    P<b> m;
+    A(T, P<b>);
+  };
+  void g() { A{char{}, {}}; }  // Previously caused an internal error.

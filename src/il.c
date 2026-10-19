@@ -8665,18 +8665,21 @@ are done.
       }  /* if */
       if (!identical_types_full(node1->type, node2->type, itf_options)) {
         eq = FALSE;
-      } else if ((options & CC_EXACT_EQUIVALENCE) &&
-                 (node1->extra.rescan_info != NULL) !=
-                                         (node2->extra.rescan_info != NULL)) {
-        /* The two expressions are equivalent, but one has associated rescan
-           information and the other not.  With the given option, the two
-           should not be considered equivalent because it could cause the
-           version with rescan information to be replaced by the other version,
-           thereby causing spurious rescan failures.  (If the two nodes have
-           associated rescan information, that information can be assumed to
-           be equivalent since the expressions are equivalent.) */
-        eq = FALSE;
       }  /* if */
+    }  /* if */
+    if (eq && (options & CC_EXACT_EQUIVALENCE) &&
+        (node1->extra.rescan_info != NULL) !=
+                                          (node2->extra.rescan_info != NULL)) {
+      /* The two expressions are equivalent, but one has associated rescan
+         information and the other not.  With the given option, the two
+         should not be considered equivalent because it could cause the
+         version with rescan information to be replaced by the other version,
+         thereby causing spurious rescan failures.  (If the two nodes have
+         associated rescan information, that information can be assumed to
+         be equivalent since the expressions are equivalent.)  This check is
+         done even when the type comparison is skipped (e.g., for variable
+         references). */
+      eq = FALSE;
     }  /* if */
   }  /* if */
 done:
