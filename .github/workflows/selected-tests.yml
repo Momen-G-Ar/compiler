@@ -56,6 +56,8 @@ jobs:
 
       - name: Parse .github/selected-tests.env
         id: request
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           get() {
             sed -n "s/^$1=//p" .github/selected-tests.env | tail -1
@@ -76,6 +78,12 @@ jobs:
             echo "::error::TESTS must be a comma-separated list of test paths"
             exit 1
           fi
+          # actions/checkout needs a full commit SHA (a short one is taken as
+          # a branch name), so resolve REF here.
+          sha=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${ref}" --jq .sha) || {
+            echo "::error::Cannot resolve REF '$ref' in ${GITHUB_REPOSITORY}"
+            exit 1
+          }
           if [ "$tests" = all ]; then
             echo "::error::Use build-and-test-ci.yml for the full suite"
             exit 1
@@ -92,7 +100,7 @@ jobs:
           [ "$record" = true ] || record=false
           join() { local IFS=,; echo "[$*]"; }
           {
-            echo "ref=$ref"
+            echo "ref=$sha"
             echo "tests=$tests"
             echo "record=$record"
             echo "configs_64=$(join "${c64[@]}")"
@@ -105,7 +113,7 @@ jobs:
             echo
             echo "| | |"
             echo "|---|---|"
-            echo "| ref | \`$ref\` |"
+            echo "| ref | \`$ref\` (\`$sha\`) |"
             echo "| tests | \`$tests\` |"
             echo "| configs | $configs |"
             echo "| record | $record |"
