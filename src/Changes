@@ -12,6 +12,28 @@ ref-qualifiers.  They now leave such types unchanged.  For example, with
   using F = __add_pointer(F);  // Previously a spurious error, now okay.
 
 
+10/20/26 [GH #173]
+CTAD through a template template parameter of an alias template
+
+With the changes for EDGcpfe/28857 (in version 6.9), a decltype in an alias
+template that deduces class template arguments through one of the alias
+template's template template parameters could trigger an internal error due to
+a failed assertion in generic_cast_operand, when the alias was used with
+dependent arguments, for example in a requires expression.  For example, with
+--c++20:
+
+  template<typename T> struct S { S(T); };
+  template<template<typename> class TT> using A = decltype(TT(0));
+  template<template<typename> class TT>
+  constexpr bool b = requires { typename A<TT>; };
+  static_assert(b<S>);  // Previously an internal error, now okay.
+
+In addition, deduction now succeeds when the template bound to the template
+template parameter has more parameters (with default arguments or packs) than
+the parameter itself, and a mismatch is now treated as a deduction failure
+rather than an error in contexts where errors are not issued.
+
+
 10/19/26  [GH #218]
 Reachability after a temporary with a "noreturn" constructor or destructor
 
