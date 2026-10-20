@@ -89,7 +89,8 @@ gh run view "$run_id" -R "$repo" --json jobs \
 
 outdir=${outdir:-.tmp/selected-tests/$run_id}
 mkdir -p "$outdir"
-gh run download "$run_id" -R "$repo" -D "$outdir" 2>/dev/null || true
+gh run download "$run_id" -R "$repo" -D "$outdir" \
+  -p 'test-results-*' -p recorded-output 2>/dev/null || true
 for log in "$outdir"/test-results-*/*/changes.elog; do
   [ -s "$log" ] || continue
   echo "== ${log#"$outdir"/test-results-}"

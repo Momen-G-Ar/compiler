@@ -274,7 +274,7 @@ jobs:
           {
             echo "### ${CONFIG}"
             echo
-            echo "Tested commit: \`$(git rev-parse HEAD)\`"
+            echo "Tested commit: \`$(git -c safe.directory='*' rev-parse HEAD)\`"
             echo
             if [ -f "${dir}/executed.elist" ]; then
               echo "Executed: $(wc -l < "${dir}/executed.elist") test variants"
@@ -297,7 +297,9 @@ jobs:
         run: |
           out=".tmp/recorded-${CONFIG}"
           mkdir -p "${out}/files"
-          git -c core.quotePath=false status --porcelain=v1 -z \
+          # The container user differs from the checkout's owner.
+          git -c safe.directory='*' -c core.quotePath=false \
+              status --porcelain=v1 -z \
               --untracked-files=all -- tests/tests tests/expectations |
             while IFS= read -r -d '' entry; do
               path="${entry:3}"
