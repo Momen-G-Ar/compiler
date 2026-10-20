@@ -1,0 +1,431 @@
+# Run selected tests (and optionally record their expected output) on any
+# branch or commit, in any of the four CI configurations.
+#
+# This workflow lives only on the "selected-tests" branch of the fork.  A
+# run is requested by pushing a change to .github/selected-tests.env on that
+# branch (see .github/run-selected-tests.sh, which does it through the
+# GitHub API without a checkout).  The request file contains:
+#
+#   REF=<branch, tag or commit to test>
+#   TESTS=<edgy filter: comma-separated suite/path list>
+#   CONFIGS=<space-separated subset of edg_x86_64 edg_x86_64_cp
+#            edg_x86_32 edg_x86_32_cp>
+#   RECORD=<true to run edgy -W and publish the recorded files as a patch>
+#
+# Build and test steps match build-and-test-ci.yml.  With RECORD=true, the
+# "recorded-output" artifact contains recorded.patch, which applies to REF
+# with "git apply".
+
+name: Run selected tests
+
+on:
+  push:
+    branches:
+      - selected-tests
+    paths:
+      - .github/selected-tests.env
+
+concurrency:
+  group: selected-tests-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Read request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ref: ${{ steps.request.outputs.ref }}
+      tests: ${{ steps.request.outputs.tests }}
+      record: ${{ steps.request.outputs.record }}
+      configs_64: ${{ steps.request.outputs.configs_64 }}
+      configs_32: ${{ steps.request.outputs.configs_32 }}
+      run_timestamp: ${{ steps.request.outputs.run_timestamp }}
+    steps:
+      - name: Check out request
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github
+          sparse-checkout-cone-mode: false
+
+      - name: Parse .github/selected-tests.env
+        id: request
+        run: |
+          get() {
+            sed -n "s/^$1=//p" .github/selected-tests.env | tail -1
+          }
+          ref=$(get REF)
+          tests=$(get TESTS)
+          configs=$(get CONFIGS)
+          record=$(get RECORD)
+          if [ -z "$ref" ] || [ -z "$tests" ]; then
+            echo "::error::REF and TESTS must be set"
+            exit 1
+          fi
+          if ! printf '%s' "$ref" | grep -Eq '^[A-Za-z0-9_./-]+$'; then
+            echo "::error::REF must be a branch, tag or commit name"
+            exit 1
+          fi
+          if ! printf '%s' "$tests" | grep -Eq '^[A-Za-z0-9_./+-]+(,[A-Za-z0-9_./+-]+)*$'; then
+            echo "::error::TESTS must be a comma-separated list of test paths"
+            exit 1
+          fi
+          if [ "$tests" = all ]; then
+            echo "::error::Use build-and-test-ci.yml for the full suite"
+            exit 1
+          fi
+          [ -n "$configs" ] || configs="edg_x86_64 edg_x86_64_cp edg_x86_32 edg_x86_32_cp"
+          c64=(); c32=()
+          for c in $configs; do
+            case "$c" in
+              edg_x86_64|edg_x86_64_cp) c64+=("\"$c\"") ;;
+              edg_x86_32|edg_x86_32_cp) c32+=("\"$c\"") ;;
+              *) echo "::error::Unknown configuration: $c"; exit 1 ;;
+            esac
+          done
+          [ "$record" = true ] || record=false
+          join() { local IFS=,; echo "[$*]"; }
+          {
+            echo "ref=$ref"
+            echo "tests=$tests"
+            echo "record=$record"
+            echo "configs_64=$(join "${c64[@]}")"
+            echo "configs_32=$(join "${c32[@]}")"
+            # Match edgutil.RUN_TIMESTAMP_FORMAT (%Y.%m.%d-%H.%M.%S).
+            echo "run_timestamp=$(date -u +'%Y.%m.%d-%H.%M.%S')"
+          } >> "${GITHUB_OUTPUT}"
+          {
+            echo "### Request"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| ref | \`$ref\` |"
+            echo "| tests | \`$tests\` |"
+            echo "| configs | $configs |"
+            echo "| record | $record |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  build-gcc:
+    name: Build linux-gcc-debug
+    needs: prepare
+    if: ${{ needs.prepare.outputs.configs_64 != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container:
+      image: ghcr.io/edgcpp/ci-runner@sha256:14b3948c2ce12cfa5472e5a6c468393d15426f3a67685cc35d830ea5db2acdf8
+    defaults:
+      run:
+        shell: edg-container-exec "bash -eo pipefail {0}"
+    steps:
+      - name: Check out ${{ needs.prepare.outputs.ref }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - name: Configure linux-gcc-debug
+        env:
+          EDG_BASE: ${{ github.workspace }}/bases/docker/dev-env/gcc
+        run: cmake --preset linux-gcc-debug
+
+      - name: Build linux-gcc-debug
+        env:
+          EDG_BASE: ${{ github.workspace }}/bases/docker/dev-env/gcc
+        run: cmake --build build/gcc
+
+      - name: Upload build products
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-linux-gcc-debug
+          path: |
+            build/gcc/bin
+            build/gcc/lib
+            build/gcc/lib_linux_*
+            build/gcc/lib_win*
+            build/gcc/environment.sh
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 6
+
+  build-i686:
+    name: Build linux-i686-gcc-debug
+    needs: prepare
+    if: ${{ needs.prepare.outputs.configs_32 != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container:
+      image: ghcr.io/edgcpp/ci-runner@sha256:14b3948c2ce12cfa5472e5a6c468393d15426f3a67685cc35d830ea5db2acdf8
+    defaults:
+      run:
+        shell: edg-container-exec "bash -eo pipefail {0}"
+    steps:
+      - name: Check out ${{ needs.prepare.outputs.ref }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - name: Configure linux-i686-gcc-debug
+        env:
+          EDG_BASE: ${{ github.workspace }}/bases/docker/dev-env/gcc-i686
+        run: cmake --preset linux-i686-gcc-debug
+
+      - name: Build linux-i686-gcc-debug
+        env:
+          EDG_BASE: ${{ github.workspace }}/bases/docker/dev-env/gcc-i686
+        run: cmake --build build/gcc-i686
+
+      - name: Upload build products
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-linux-i686-gcc-debug
+          path: |
+            build/gcc-i686/bin
+            build/gcc-i686/lib
+            build/gcc-i686/lib_linux_*
+            build/gcc-i686/lib_win*
+            build/gcc-i686/environment.sh
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 6
+
+  test-gcc:
+    name: Test ${{ matrix.config }}
+    needs:
+      - prepare
+      - build-gcc
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJSON(needs.prepare.outputs.configs_64) }}
+    container:
+      image: ghcr.io/edgcpp/ci-runner@sha256:14b3948c2ce12cfa5472e5a6c468393d15426f3a67685cc35d830ea5db2acdf8
+      # Required for setarch ... -R (disable ASLR) used by the test harness.
+      options: --privileged
+    defaults:
+      run:
+        shell: edg-container-exec "bash -eo pipefail {0}"
+    env:
+      BUILD_DIR: build/gcc
+      EDG_BASE_DIR: bases/docker/dev-env/gcc
+    steps: &test-steps
+      - name: Check out ${{ needs.prepare.outputs.ref }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - name: Download build
+        uses: actions/download-artifact@v7
+        with:
+          name: build-linux-${{ env.BUILD_DIR == 'build/gcc' && 'gcc' || 'i686-gcc' }}-debug
+          path: ${{ env.BUILD_DIR }}
+
+      - name: Restore execute bits on build binaries
+        run: chmod -R a+x "${BUILD_DIR}/bin"
+
+      - name: Run edgy (${{ matrix.config }})
+        id: edgy
+        continue-on-error: ${{ needs.prepare.outputs.record == 'true' }}
+        env:
+          RUN_TIMESTAMP: ${{ needs.prepare.outputs.run_timestamp }}
+          CONFIG: ${{ matrix.config }}
+          TESTS: ${{ needs.prepare.outputs.tests }}
+          RECORD: ${{ needs.prepare.outputs.record }}
+        run: |
+          record_flag=
+          [ "${RECORD}" != true ] || record_flag=-W
+          mkdir -p .tmp
+          cat > .tmp/selected-tests-edg-base.sh <<EOF
+          export EDG_BASE="${GITHUB_WORKSPACE}/${EDG_BASE_DIR}"
+          EOF
+
+          cat > .tmp/selected-tests.edgivk <<EOF
+          prefix_source TEST_${CONFIG} ${BUILD_DIR}/environment.sh
+          prefix_source TEST_${CONFIG} .tmp/selected-tests-edg-base.sh
+          exec edgy --config="${CONFIG}" --run-timestamp="${RUN_TIMESTAMP}" --timeout=600 -A --meticulous ${record_flag} "${TESTS}"
+          EOF
+
+          edg-prefix-env-loader .tmp/selected-tests.edgivk
+
+      - name: Summarize results
+        if: ${{ always() }}
+        env:
+          RUN_TIMESTAMP: ${{ needs.prepare.outputs.run_timestamp }}
+          CONFIG: ${{ matrix.config }}
+        run: |
+          dir="tests/runs/${RUN_TIMESTAMP}/${CONFIG}"
+          {
+            echo "### ${CONFIG}"
+            echo
+            echo "Tested commit: \`$(git rev-parse HEAD)\`"
+            echo
+            if [ -f "${dir}/executed.elist" ]; then
+              echo "Executed: $(wc -l < "${dir}/executed.elist") test variants"
+            fi
+            echo
+            if [ -s "${dir}/changes.elog" ]; then
+              echo "Unexpected changes:"
+              echo '```'
+              cat "${dir}/changes.elog"
+              echo '```'
+            else
+              echo "No unexpected changes."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Collect recorded files
+        if: ${{ always() && needs.prepare.outputs.record == 'true' }}
+        env:
+          CONFIG: ${{ matrix.config }}
+        run: |
+          out=".tmp/recorded-${CONFIG}"
+          mkdir -p "${out}/files"
+          git -c core.quotePath=false status --porcelain=v1 -z \
+              --untracked-files=all -- tests/tests tests/expectations |
+            while IFS= read -r -d '' entry; do
+              path="${entry:3}"
+              if [ -e "${path}" ]; then
+                mkdir -p "${out}/files/$(dirname "${path}")"
+                cp -p "${path}" "${out}/files/${path}"
+              else
+                printf '%s\n' "${path}" >> "${out}/deleted.txt"
+              fi
+            done
+          touch "${out}/deleted.txt"
+          find "${out}/files" -type f | sed "s|^${out}/files/||" | sort
+
+      - name: Upload recorded files
+        if: ${{ always() && needs.prepare.outputs.record == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: recorded-${{ matrix.config }}
+          path: .tmp/recorded-${{ matrix.config }}
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload elist, elog, and .rt.tar.gz results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.config }}
+          path: |
+            tests/runs/${{ needs.prepare.outputs.run_timestamp }}/**/*.elist
+            tests/runs/${{ needs.prepare.outputs.run_timestamp }}/**/*.elog
+            tests/runs/${{ needs.prepare.outputs.run_timestamp }}/**/*.rt.tar.gz
+          if-no-files-found: warn
+          retention-days: 7
+
+  test-i686:
+    name: Test ${{ matrix.config }}
+    needs:
+      - prepare
+      - build-i686
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJSON(needs.prepare.outputs.configs_32) }}
+    container:
+      image: ghcr.io/edgcpp/ci-runner@sha256:14b3948c2ce12cfa5472e5a6c468393d15426f3a67685cc35d830ea5db2acdf8
+      # Required for setarch ... -R (disable ASLR) used by the test harness.
+      options: --privileged
+    defaults:
+      run:
+        shell: edg-container-exec "bash -eo pipefail {0}"
+    env:
+      BUILD_DIR: build/gcc-i686
+      EDG_BASE_DIR: bases/docker/dev-env/gcc-i686
+    steps: *test-steps
+
+  combine-recordings:
+    name: Combine recorded output
+    needs:
+      - prepare
+      - test-gcc
+      - test-i686
+    if: >-
+      ${{ always() && needs.prepare.outputs.record == 'true' &&
+      needs.prepare.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out ${{ needs.prepare.outputs.ref }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - name: Download recorded files
+        uses: actions/download-artifact@v7
+        with:
+          pattern: recorded-*
+          path: .tmp/recorded
+
+      - name: Build recorded.patch
+        run: |
+          shopt -s nullglob
+          conflicts=0
+          for dir in .tmp/recorded/recorded-*; do
+            config="${dir##*/recorded-}"
+            if [ -d "${dir}/files" ]; then
+              while IFS= read -r -d '' file; do
+                path="${file#"${dir}/files/"}"
+                if [ -f ".tmp/written/${path}" ] && ! cmp -s "${file}" "${path}"; then
+                  echo "::warning::${path}: ${config} recorded different content than $(cat ".tmp/written/${path}")"
+                  conflicts=1
+                fi
+                mkdir -p "$(dirname "${path}")" ".tmp/written/$(dirname "${path}")"
+                cp -p "${file}" "${path}"
+                echo "${config}" > ".tmp/written/${path}"
+              done < <(find "${dir}/files" -type f -print0)
+            fi
+            if [ -f "${dir}/deleted.txt" ]; then
+              while IFS= read -r path; do
+                [ -n "${path}" ] && rm -f -- "${path}"
+              done < "${dir}/deleted.txt"
+            fi
+          done
+          # Each configuration was recorded in its own job, so a
+          # configuration-specific file may duplicate the new default.*
+          # file.  Remove such duplicates, as a single edgy -W run does.
+          git -c core.quotePath=false status --porcelain=v1 -z \
+              --untracked-files=all -- tests/tests |
+            tr '\0' '\n' | sed -n 's|^...\(.*/\.[^/]*\.rto\)/.*|\1|p' |
+            sort -u > .tmp/rto-dirs.txt
+          PYTHONPATH=dev_tools/pylibs python3 - <<'PY'
+          from pathlib import Path
+          from edgtest import runtest
+          for line in Path('.tmp/rto-dirs.txt').read_text().splitlines():
+            if Path(line).is_dir():
+              runtest.dedupe_recording_directory(Path(line), env = {})
+          PY
+          git add -A -- tests/tests tests/expectations
+          mkdir -p .tmp/out
+          git diff --cached --binary > .tmp/out/recorded.patch
+          git diff --cached --stat > .tmp/out/recorded.stat
+          {
+            echo "### Recorded output"
+            echo
+            if [ -s .tmp/out/recorded.patch ]; then
+              echo "Apply to \`$(git rev-parse HEAD)\` with \`git apply recorded.patch\`."
+              echo
+              echo '```'
+              cat .tmp/out/recorded.stat
+              echo '```'
+            else
+              echo "Recording changed no files."
+            fi
+            if [ "${conflicts}" = 1 ]; then
+              echo
+              echo "**Warning:** configurations recorded different content for the same file; see the job log."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload recorded.patch
+        uses: actions/upload-artifact@v7
+        with:
+          name: recorded-output
+          path: .tmp/out
+          include-hidden-files: true
+          retention-days: 7
