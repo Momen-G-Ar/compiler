@@ -25,6 +25,11 @@ on:
     paths:
       - .github/selected-tests.env
 
+# The jobs only read the repository; the tested code must not get a token
+# that can write to it.
+permissions:
+  contents: read
+
 concurrency:
   group: selected-tests-${{ github.sha }}
   cancel-in-progress: false
@@ -47,6 +52,7 @@ jobs:
         with:
           sparse-checkout: .github
           sparse-checkout-cone-mode: false
+          persist-credentials: false
 
       - name: Parse .github/selected-tests.env
         id: request
@@ -121,6 +127,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.ref }}
+          persist-credentials: false
 
       - name: Configure linux-gcc-debug
         env:
@@ -162,6 +169,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.ref }}
+          persist-credentials: false
 
       - name: Configure linux-i686-gcc-debug
         env:
@@ -213,6 +221,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.ref }}
+          persist-credentials: false
 
       - name: Download build
         uses: actions/download-artifact@v7
@@ -355,6 +364,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.ref }}
+          persist-credentials: false
 
       - name: Download recorded files
         uses: actions/download-artifact@v7
