@@ -1,5 +1,17 @@
 Version 7.1
 
+10/21/26 [GH #335]
+Type transformations of qualified function types
+
+Previously, the __add_lvalue_reference, __add_rvalue_reference, __add_pointer,
+and __decay intrinsics produced incorrect types for function types with cv- or
+ref-qualifiers.  They now leave such types unchanged.  For example, with
+--c++11:
+
+  using F = void() const;
+  using F = __add_pointer(F);  // Previously a spurious error, now okay.
+
+
 10/19/26  [GH #218]
 Reachability after a temporary with a "noreturn" constructor or destructor
 
