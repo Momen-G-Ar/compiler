@@ -106,8 +106,13 @@ def _check(root: Path, **request: object) -> object:
 def test_only_allowed_commands_run(tmp_path: Path) -> None:
   sh = shutil.which('sh')
   assert sh is not None
-  # By name or by the path it resolves to; the resolved one runs.
-  for name in ('sh', os.path.abspath(sh)):
+  # Another path to the same program, as the client may find it on its own
+  # search path (Fedora's /usr/sbin links to /usr/bin).
+  linked_dir = tmp_path / 'sbin'
+  linked_dir.symlink_to(os.path.dirname(os.path.abspath(sh)))
+  # By name, by the path it resolves to, or by any other path to it; the
+  # resolved one runs.
+  for name in ('sh', os.path.abspath(sh), str(linked_dir / 'sh')):
     job = _check(tmp_path, argv = [name, '-c', 'true'])
     assert job.argv[0] == os.path.abspath(sh)  # type: ignore[attr-defined]
   refused = [

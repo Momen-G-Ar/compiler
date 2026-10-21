@@ -82,6 +82,18 @@ def _under_roots(value: str, roots: Sequence[Path]) -> bool:
   )
 
 
+def _names_program(name: str, prefix: str, resolved: str) -> bool:
+  '''Whether a request's ``name`` names the program ``prefix`` resolved to:
+  by name, or by any absolute path to it (the client may have found it on
+  a search path of its own, e.g. through Fedora's /usr/sbin, which links to
+  /usr/bin).
+  '''
+  if name in (prefix, resolved):
+    return True
+  return (os.path.isabs(name) and
+          os.path.realpath(name) == os.path.realpath(resolved))
+
+
 @dataclass(frozen = True)
 class Job:
   argv: tuple[str, ...]
@@ -102,7 +114,7 @@ def check_request(request: Mapping[str, Any],
   prefix_length = 0
   for prefix, resolved in commands:
     if (len(argv) >= len(prefix) and
-        argv[0] in (prefix[0], resolved) and
+        _names_program(argv[0], prefix[0], resolved) and
         tuple(argv[1:len(prefix)]) == prefix[1:]):
       program = resolved
       prefix_length = len(prefix)

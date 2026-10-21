@@ -25,7 +25,8 @@ class RunnerPolicy:
 
   - ``commands``: allowed argument prefixes. The first element of each is
     resolved on ``search_path`` when the runner starts; a request may name
-    it either way, and the resolved one runs.
+    it by name or by any absolute path to the same file, and the resolved
+    one runs.
   - ``roots``: every absolute path in the request (arguments after the
     allowed prefix, the working directory, and variable values) must lie
     under one of them.
