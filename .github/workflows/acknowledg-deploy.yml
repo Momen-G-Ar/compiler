@@ -16,7 +16,7 @@
 # Host, paths, and credentials come from secrets in the `acknowledg`
 # environment (see dev_tools/services/acknowledg/README.md). The SSH setup
 # writes them into a `Host acknowledg` alias so they never appear on a command
-# line.
+# line. The public API URL is the ACKNOWLEDG_API_HOST repository variable.
 
 name: AcknowlEDG Deploy
 
@@ -61,7 +61,7 @@ jobs:
       - name: Build client
         working-directory: ${{ env.ACKNOWLEDG_DIR }}/client
         env:
-          VITE_EDG_ACKNOWLEDG_API_HOST: ${{ secrets.ACKNOWLEDG_API_HOST }}
+          VITE_EDG_ACKNOWLEDG_API_HOST: ${{ vars.ACKNOWLEDG_API_HOST }}
         run: |
           # The client opens `${VITE_EDG_ACKNOWLEDG_API_HOST}/review`; without
           # a scheme the browser resolves that relative to the page instead.
