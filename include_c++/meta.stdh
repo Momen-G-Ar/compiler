@@ -8,11 +8,17 @@ SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 /*
 meta -- Include file for std::meta facilities
 
-This is an experimental header approximating support for facilities as
-described in the C++ committee's paper P2996.
+This header approximates support for facilities as described in the C++
+committee's paper P2996.
 */
 #ifndef __META_STDH
 #define __META_STDH
+
+/* The library feature-test macro for reflection, with the value GCC 16
+   uses.  As in GCC, it is defined only when reflection is enabled. */
+#if defined(__cpp_impl_reflection) && !defined(__cpp_lib_reflection)
+#define __cpp_lib_reflection 202603L
+#endif /* defined(__cpp_impl_reflection) && ... */
 
 #include <concepts>
 #include <initializer_list>
