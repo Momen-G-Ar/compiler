@@ -1,0 +1,18 @@
+[GH #356]
+GNU/Clang compatibility: C++11 constexpr templates with non-return statements
+
+When a statement that is not permitted in a C++11 constexpr function or
+constructor was accepted with a warning (for example, in a function or
+constructor template in some GNU or Clang C++11 modes), the function or
+constructor was nevertheless marked as unusable in constant expressions.
+That is now fixed: The function or constructor remains eligible for constant
+evaluation unless the diagnostic is issued as an error.  For example, with
+--c++11 --gnu=150000:
+
+  template<typename T> struct S {
+    T x;
+    constexpr S(T i) : x(i) {
+      if (sizeof(T) == 0) {}  // Warning in C++11 mode.
+    }
+  };
+  constexpr S<int> s(42);  // Previously an error, now okay.

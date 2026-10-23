@@ -8147,6 +8147,10 @@ expr_statement:
     if (current_rp->is_declared_constexpr || current_rp->is_consteval) {
       /* Report an error if the statement is not one that is allowed in a
          constexpr function or constexpr constructor. */
+      an_error_code  err_code =
+                       special_kind_is(current_rp, sfk_constructor) ?
+                                ec_invalid_statement_in_constexpr_constructor :
+                                ec_invalid_statement_in_constexpr_function;
       if (current_rp->is_prototype_instantiation &&
           in_constexpr_body_sev == es_error && !strict_ansi_mode) {
         /* In uninstantiated templates common practice is to either not
@@ -8157,13 +8161,13 @@ expr_statement:
                  current_rp->is_template_function) {
         in_constexpr_body_sev = es_warning;
       }  /* if */
-      pos_diagnostic(in_constexpr_body_sev,
-                     special_kind_is(current_rp, sfk_constructor) ?
-                                ec_invalid_statement_in_constexpr_constructor :
-                                ec_invalid_statement_in_constexpr_function,
-                     &start_pos);
+      pos_diagnostic(in_constexpr_body_sev, err_code, &start_pos);
+      if (is_effective_error(err_code, in_constexpr_body_sev, &start_pos)) {
+        scope_stack[depth_innermost_function_scope].constexpr_ruled_out = TRUE;
+      }  /* if */
+    } else {
+      scope_stack[depth_innermost_function_scope].constexpr_ruled_out = TRUE;
     }  /* if */
-    scope_stack[depth_innermost_function_scope].constexpr_ruled_out = TRUE;
   }  /* if */
   /* Loop if we just got a label and not an actual statement. */
   if (get_another_statement) {
