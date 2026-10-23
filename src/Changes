@@ -1,5 +1,37 @@
 Version 7.1
 
+10/22/26 [GH #305]
+Attribute namespaces that only start like a known one are not recognized
+
+An attribute namespace was treated as known if it was merely the first part
+of the name of a known namespace; the whole name must now match.
+For example:
+
+  [[cl::x]] int a;    // Warning: attribute namespace "cl" is unrecognized
+  [[g::y]] int b;     // Previously, the namespace was accepted.
+
+
+10/22/26 [GH #183]
+GNU compatibility: "inline" combined with "noinline" on a definition
+
+In GNU and Clang C++ modes, the front end warned that a routine is both
+"inline" and "noinline" when a function definition was declared "inline" and
+had the GNU "noinline" attribute, but GCC accepts that combination silently
+(it is used, e.g., by Boost through "BOOST_NOINLINE inline").  For example:
+
+  inline __attribute__((noinline)) int f(int x) {  // No warning now.
+    return x;
+  }
+
+In C modes, where GCC and Clang warn about the combination in all of those
+cases, the behavior is unchanged.
+
+Also, instantiating a function template (or a member function of a class
+template) that is both "inline" and "noinline" no longer repeats the warning
+"At end of source" for each instance, only the template declarations are
+checked.
+
+
 10/21/26 [GH #335]
 Type transformations of qualified function types
 

@@ -1,9 +1,0 @@
-[GH #305]
-Attribute namespaces that only start like a known one are not recognized
-
-An attribute namespace was treated as known if it was merely the first part
-of the name of a known namespace; the whole name must now match.
-For example:
-
-  [[cl::x]] int a;    // Warning: attribute namespace "cl" is unrecognized
-  [[g::y]] int b;     // Previously, the namespace was accepted.
