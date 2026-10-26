@@ -36,7 +36,6 @@
 import json
 import os
 import platform
-import re
 import shutil
 import subprocess
 import sys
@@ -96,10 +95,6 @@ def _is_excluded_file_path(path_str: str) -> bool:
   return any(
     path_str.startswith(prefix) for prefix in EXCLUDES_PATH_PREFIXES
   )
-
-COMMIT_SUBJECT_POLICY_REGEX = re.compile(
-  r'^.*\[(GH #[0-9]+|(EDG[cfjp]+fe/([0-9]+))|,)*\].*$'
-)
 
 TOOL_PATH_GIT = shutil.which('git')
 
@@ -182,7 +177,7 @@ class PrePushChecker:
     As commits are walked, check to make sure they match formatting guidance.
 
     Returns the oldest new commit hash, or None if there are no new commits.
-    Exits immediately if a commit subject fails the PR-number policy.
+    Exits immediately if a commit message fails the policy.
     '''
     first_new_commit = None
 
@@ -201,11 +196,15 @@ class PrePushChecker:
       print_indented(show_output, '  ')
       print('')
 
-      subject = git_output(['show', '--no-patch', '--format=%s', commit])
-      if COMMIT_SUBJECT_POLICY_REGEX.match(subject) is None:
-        print(
-          "  [POLICY] Commit message doesn't contain valid PR number (or [])."
-        )
+      # Read bytes: text mode would turn any \r into \n, hiding it from the
+      # check.  Don't strip: that would also remove \r, \x0c, etc. at the ends
+      # of the message.
+      message = run_git(
+        ['show', '--no-patch', '--format=%B', commit], text = False
+      ).stdout.decode('utf-8', errors = 'replace')
+      problem = edgchanges.check_commit_message(message)
+      if problem is not None:
+        print(f"  [POLICY] Commit message: {problem}.")
         sys.exit(1)
 
       first_new_commit = commit
