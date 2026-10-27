@@ -6814,7 +6814,6 @@ gnu/cpp/cpp1y/pr61636-3.sft.cpp:fn:-DTEST_NUMBER=1 --c++14:FAIL:
 gnu/cpp/cpp1y/pr68180.sft.cpp:fn:-DTEST_NUMBER=1 --c++14:FAIL:
 gnu/cpp/cpp1y/pr79435.sft.cpp:fn:-DTEST_NUMBER=1 --c++14:FAIL:
 gnu/cpp/cpp1y/pr79463.sft.cpp:fn:-DTEST_NUMBER=1 --c++14:FAIL:
-gnu/cpp/cpp1y/pr79937-4.sft.cpp:rp:-DTEST_NUMBER=1 --c++14:FAIL:
 gnu/cpp/cpp1y/sized-dealloc2/test.mft.cpp:fp:-DTEST_NUMBER=1:FAIL:
 gnu/cpp/cpp1y/udlit-char-template-sfinae-neg.sft.cpp:fn:-DTEST_NUMBER=1 --c++14:ABORT:
 gnu/cpp/cpp1y/var-templ20.sft.cpp:fn:-DTEST_NUMBER=1 --c++14:FAIL:
