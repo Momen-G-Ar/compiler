@@ -1126,6 +1126,7 @@ Clear an initialization position description entry to default values.
   ipdp->array_element_sequence    = FALSE;
   ipdp->base_class_subobject      = FALSE;
   ipdp->base_of_complete_object   = FALSE;
+  ipdp->not_this_candidate        = FALSE;
   ipdp->base_type                 = NULL;
   ipdp->modifiers                 = NULL;
   ipdp->array_element_count       = 0;
@@ -6301,6 +6302,18 @@ Pop the top entry from aggregate_this_stack.
 }  /* pop_aggregate_this */
 
 
+static a_boolean is_anonymous_union_class(a_type_ptr type)
+/*
+Return TRUE if type is the class type of an anonymous union.
+*/
+{
+  type = skip_typerefs(type);
+  return is_immediate_class_type(type) &&
+         class_type_supp(type)->anonymous_union_kind !=
+                                            (an_anonymous_union_kind)auk_none;
+}  /* is_anonymous_union_class */
+
+
 static a_boolean has_aggregate_with_dynamic(a_constant_ptr con)
 /*
 Returns TRUE if the constant includes (at some level) an aggregate that
@@ -6730,6 +6743,17 @@ dealt with).
         ipmp->curr_field = curr_field;
         ipmp->type = curr_field->type;
       }  /* if */
+      /* An implicit "this" in the initializer of an element refers to this
+         aggregate only if the element comes from a default member
+         initializer (i.e., it is implicit); an explicitly specified element
+         refers to the "this" of the enclosing context, as in:
+           struct Y { unsigned k; unsigned n = Y{2, k}.n; };
+         where "k" in "Y{2, k}" designates the outer Y, not the temporary.
+         The default member initializers of the members of an anonymous
+         union refer to the enclosing class, so an anonymous union does not
+         affect the search. */
+      ipdp->not_this_candidate = !con_ptr->implicit_aggr_element &&
+                                 !is_anonymous_union_class(aggr_type);
     }  /* if */
     /* Initialize one member of the aggregate (of type ipmp->type) with
        one constant (con_ptr). */
@@ -7051,7 +7075,10 @@ dealt with).
   if (!aggr_const->is_partially_initialized) {
     (void)recompute_partially_initialized_flag(aggr_const, aggr_type);
   }  /* if */
-  if (!array_or_vector) pop_aggregate_this();
+  if (!array_or_vector) {
+    ipdp->not_this_candidate = FALSE;
+    pop_aggregate_this();
+  }  /* if */
 }  /* lower_dynamic_init_aggregate_constant */
 
 #if USE_PATCH_INIT_STARTUP
