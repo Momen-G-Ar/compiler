@@ -1,5 +1,58 @@
 Version 7.1
 
+10/27/26 [GH #325]
+GNU/Clang compatibility: argument checking for arithmetic overflow builtins
+
+Previously, calls to __builtin_add_overflow, __builtin_sub_overflow, and
+__builtin_mul_overflow (and their GNU _p forms) could be accepted with invalid
+argument types or an incorrect number of arguments.  These calls are now
+properly diagnosed.  For example, with --gnu_version=150200:
+
+  struct S {};
+  void f(S s, int *p) {
+    __builtin_add_overflow(s, 1, p);  // Previously accepted, now an error.
+  }
+
+
+10/27/26 [GH #356]
+GNU/Clang compatibility: C++11 constexpr templates with non-return statements
+
+When a statement that is not permitted in a C++11 constexpr function or
+constructor was accepted with a warning (for example, in a function or
+constructor template in some GNU or Clang C++11 modes), the function or
+constructor was nevertheless marked as unusable in constant expressions.
+That is now fixed: The function or constructor remains eligible for constant
+evaluation unless the diagnostic is issued as an error.  For example, with
+--c++11 --gnu=150000:
+
+  template<typename T> struct S {
+    T x;
+    constexpr S(T i) : x(i) {
+      if (sizeof(T) == 0) {}  // Warning in C++11 mode.
+    }
+  };
+  constexpr S<int> s(42);  // Previously an error, now okay.
+
+
+10/27/26 [GH #395]
+Internal error in CTAD rescan info for reused specializations
+
+An internal error ("missing default rescan info") could occur when building
+an implicit deduction guide for a constructor whose parameter type is a
+class template specialization with a nontype template argument referring to
+a dependent static data member, if that same specialization was already used
+earlier in the class (e.g., in a member declaration).  For example, with
+--c++17:
+
+  template<int> struct P {};
+  template<typename T> struct A {
+    static constexpr bool b = sizeof(T) == 1;
+    P<b> m;
+    A(T, P<b>);
+  };
+  void g() { A{char{}, {}}; }  // Previously caused an internal error.
+
+
 10/23/26 [GH #327]
 __has_unique_object_representations fixes
 
